@@ -1,4 +1,4 @@
-# Gofile-Batch-dl [![python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+# Gofile-dl [![python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
@@ -8,11 +8,11 @@ A CLI (Command Line Interface) tool to download all directories and files from a
 ## Setup ##
 1. Download repository  
 ```console
-git clone https://github.com/rkwyu/gofile-batch-dl
+git clone https://github.com/rkwyu/gofile-dl
 ```
 2. Install dependencies
 ```console
-cd ./gofile-batch-dl
+cd ./gofile-dl
 python -m pip install -r requirements.txt
 ```
 
