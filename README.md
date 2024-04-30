@@ -1,6 +1,8 @@
-# Gofile-dl [![python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+# Gofile-dl [![python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org) 
 
-[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+<a href="https://buymeacoffee.com/r1y5i" target="_blank">
+<img style="border-radius: 20px" src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174">
+</a>
 
 ## About ##
 A CLI (Command Line Interface) tool to download all directories and files from a gofile.io link as a batch  
@@ -40,4 +42,4 @@ python run.py -d /baz/qux https://gofile.io/d/foobar
 ```
 
 ## License ##
-[GNU GPL v3.0](LICENSE.md)
+This project is licensed under the [MIT License](LICENSE.md)
