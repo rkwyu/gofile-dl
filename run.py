@@ -5,6 +5,8 @@ import os
 from typing import Dict
 from pathvalidate import sanitize_filename
 import requests
+import hashlib
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,6 +59,8 @@ class GoFile(metaclass=GoFileMeta):
             if data["status"] == "ok":
                 self.token = data["data"]["token"]
                 logger.info(f"updated token: {self.token}")
+            else:
+                raise Exception("cannot get token")
 
     def update_wt(self) -> None:
         if self.wt == "":
@@ -64,37 +68,43 @@ class GoFile(metaclass=GoFileMeta):
             if 'wt: "' in alljs:
                 self.wt = alljs.split('wt: "')[1].split('"')[0]
                 logger.info(f"updated wt: {self.wt}")
+            else:
+                raise Exception("cannot get wt")
 
-    def execute(self, dir: str, content_id: str = None, url: str = None) -> None:
+    def execute(self, dir: str, content_id: str = None, url: str = None, password: str = None) -> None:
         if content_id is not None:
             self.update_token()
             self.update_wt()
+            hash_password = hashlib.sha256(password.encode()).hexdigest() if password != None else ""
             data = requests.get(
-                f"https://api.gofile.io/contents/{content_id}?wt={self.wt}&cache=true",
+                f"https://api.gofile.io/contents/{content_id}?wt={self.wt}&cache=true&password={hash_password}",
                 headers={
                     "Authorization": "Bearer " + self.token,
                 },
             ).json()
             if data["status"] == "ok":
-                if data["data"]["type"] == "folder":
-                    dirname = data["data"]["name"]
-                    dir = os.path.join(dir, sanitize_filename(dirname))
-                    for children_id in data["data"]["childrenIds"]:
-                        if data["data"]["children"][children_id]["type"] == "folder":
-                            self.execute(dir=dir, content_id=children_id)
-                        else:
-                            filename = data["data"]["children"][children_id]["name"]
-                            file = os.path.join(dir, sanitize_filename(filename))
-                            link = data["data"]["children"][children_id]["link"]
-                            self.download(link, file)
+                if data["data"].get("passwordStatus", "passwordOk") == "passwordOk":
+                    if data["data"]["type"] == "folder":
+                        dirname = data["data"]["name"]
+                        dir = os.path.join(dir, sanitize_filename(dirname))
+                        for children_id in data["data"]["childrenIds"]:
+                            if data["data"]["children"][children_id]["type"] == "folder":
+                                self.execute(dir=dir, content_id=children_id, password=password)
+                            else:
+                                filename = data["data"]["children"][children_id]["name"]
+                                file = os.path.join(dir, sanitize_filename(filename))
+                                link = data["data"]["children"][children_id]["link"]
+                                self.download(link, file)
+                    else:
+                        filename = data["data"]["name"]
+                        file = os.path.join(dir, sanitize_filename(filename))
+                        link = data["data"]["link"]
+                        self.download(link, file)
                 else:
-                    filename = data["data"]["name"]
-                    file = os.path.join(dir, sanitize_filename(filename))
-                    link = data["data"]["link"]
-                    self.download(link, file)
+                    logger.error(f"invalid password: {data['data'].get('passwordStatus')}")
         elif url is not None:
             if url.startswith("https://gofile.io/d/"):
-                self.execute(dir=dir, content_id=url.split("/")[-1])
+                self.execute(dir=dir, content_id=url.split("/")[-1], password=password)
             else:
                 logger.error(f"invalid url: {url}")
         else:
@@ -126,7 +136,8 @@ class GoFile(metaclass=GoFileMeta):
 parser = argparse.ArgumentParser()
 parser.add_argument("url")
 parser.add_argument("-d", type=str, dest="dir", help="output directory")
+parser.add_argument("-p", type=str, dest="password", help="password")
 args = parser.parse_args()
 if __name__ == "__main__":
     dir = args.dir if args.dir is not None else "./output"
-    GoFile().execute(dir=dir, url=args.url)
+    GoFile().execute(dir=dir, url=args.url, password=args.password)

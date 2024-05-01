@@ -20,14 +20,15 @@ python -m pip install -r requirements.txt
 
 ## Usage (CLI) ##
 ```console
-usage: run.py [-h] [-d DIR] url
+usage: run.py [-h] [-d DIR] [-p PASSWORD] url
 
 positional arguments:
   url
 
 options:
-  -h, --help  show this help message and exit
-  -d DIR      output directory
+  -h, --help   show this help message and exit
+  -d DIR       output directory
+  -p PASSWORD  password
 ```
 Default output directory is `./output` 
 
@@ -39,6 +40,11 @@ python run.py https://gofile.io/d/foobar
 #### Example 2: Download files from https://gofile.io/d/foobar to directory /baz/qux ####
 ```console
 python run.py -d /baz/qux https://gofile.io/d/foobar
+```
+
+#### Example 3: Download files from https://gofile.io/d/foobar with password "1234" protected ####
+```console
+python run.py -p 1234 https://gofile.io/d/foobar
 ```
 
 ## License ##
