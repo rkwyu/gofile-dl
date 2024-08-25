@@ -87,7 +87,7 @@ class GoFile(metaclass=GoFileMeta):
                     if data["data"]["type"] == "folder":
                         dirname = data["data"]["name"]
                         dir = os.path.join(dir, sanitize_filename(dirname))
-                        for children_id in data["data"]["childrenIds"]:
+                        for children_id in data["data"]["children"]:
                             if data["data"]["children"][children_id]["type"] == "folder":
                                 self.execute(dir=dir, content_id=children_id, password=password)
                             else:
