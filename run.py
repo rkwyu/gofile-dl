@@ -87,13 +87,13 @@ class GoFile(metaclass=GoFileMeta):
                     if data["data"]["type"] == "folder":
                         dirname = data["data"]["name"]
                         dir = os.path.join(dir, sanitize_filename(dirname))
-                        for children_id in data["data"]["childrenIds"]:
-                            if data["data"]["children"][children_id]["type"] == "folder":
-                                self.execute(dir=dir, content_id=children_id, password=password)
+                        for (id, child) in data["data"]["children"].items():
+                            if child["type"] == "folder":
+                                self.execute(dir=dir, content_id=id, password=password)
                             else:
-                                filename = data["data"]["children"][children_id]["name"]
+                                filename = child["name"]
                                 file = os.path.join(dir, sanitize_filename(filename))
-                                link = data["data"]["children"][children_id]["link"]
+                                link = child["link"]
                                 self.download(link, file)
                     else:
                         filename = data["data"]["name"]
