@@ -64,9 +64,9 @@ class GoFile(metaclass=GoFileMeta):
 
     def update_wt(self) -> None:
         if self.wt == "":
-            alljs = requests.get("https://gofile.io/dist/js/alljs.js").text
-            if 'wt: "' in alljs:
-                self.wt = alljs.split('wt: "')[1].split('"')[0]
+            alljs = requests.get("https://gofile.io/dist/js/global.js").text
+            if 'appdata.wt = "' in alljs:
+                self.wt = alljs.split('appdata.wt = "')[1].split('"')[0]
                 logger.info(f"updated wt: {self.wt}")
             else:
                 raise Exception("cannot get wt")
