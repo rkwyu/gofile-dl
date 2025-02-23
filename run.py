@@ -111,27 +111,34 @@ class GoFile(metaclass=GoFileMeta):
             logger.error(f"invalid parameters")
 
     def download(self, link: str, file: str, chunk_size: int = 8192):
+        temp = file + ".part"
         try:
             dir = os.path.dirname(file)
             if not os.path.exists(dir):
                 os.makedirs(dir)
             if not os.path.exists(file):
+                size = os.path.getsize(temp) if os.path.exists(temp) else 0
                 with requests.get(
-                    link, headers={"Cookie": "accountToken=" + self.token}, stream=True
+                    link, headers={
+                        "Cookie": f"accountToken={self.token}",
+                        "Range": f"bytes={size}-"
+                    }, stream=True
                 ) as r:
                     r.raise_for_status()
-                    with open(file, "wb") as f:
-                        content_length = int(r.headers["Content-Length"])
+                    with open(temp, "ab") as f:
+                        total_size = int(r.headers.get("Content-Length", 0)) + size
                         progress_bar = ProgressBar(
-                            "Downloading", 0, math.ceil(content_length / chunk_size)
+                            "Downloading", size // chunk_size, math.ceil(total_size / chunk_size)
                         )
                         for chunk in r.iter_content(chunk_size=chunk_size):
                             f.write(chunk)
                             progress_bar.print()
+                    os.rename(temp, file)
                     logger.info(f"downloaded: {file} ({link})")
         except Exception as e:
             logger.error(f"failed to download ({e}): {file} ({link})")
-
+            if os.path.exists(temp):
+                os.remove(temp)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("url")
