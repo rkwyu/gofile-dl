@@ -116,11 +116,14 @@ class GoFile(metaclass=GoFileMeta):
             if not os.path.exists(dir):
                 os.makedirs(dir)
             if not os.path.exists(file):
+                temp = file + ".part"
+                if os.path.exists(temp):
+                    os.remove(temp)
                 with requests.get(
                     link, headers={"Cookie": "accountToken=" + self.token}, stream=True
                 ) as r:
                     r.raise_for_status()
-                    with open(file, "wb") as f:
+                    with open(temp, "wb") as f:
                         content_length = int(r.headers["Content-Length"])
                         progress_bar = ProgressBar(
                             "Downloading", 0, math.ceil(content_length / chunk_size)
@@ -128,6 +131,7 @@ class GoFile(metaclass=GoFileMeta):
                         for chunk in r.iter_content(chunk_size=chunk_size):
                             f.write(chunk)
                             progress_bar.print()
+                    os.rename(temp, file)
                     logger.info(f"downloaded: {file} ({link})")
         except Exception as e:
             logger.error(f"failed to download ({e}): {file} ({link})")
