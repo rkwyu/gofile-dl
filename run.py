@@ -117,16 +117,18 @@ class GoFile(metaclass=GoFileMeta):
                 os.makedirs(dir)
             if not os.path.exists(file):
                 temp = file + ".part"
-                if os.path.exists(temp):
-                    os.remove(temp)
+                size = os.path.getsize(temp) if os.path.exists(temp) else 0
                 with requests.get(
-                    link, headers={"Cookie": "accountToken=" + self.token}, stream=True
+                    link, headers={
+                        "Cookie": f"accountToken={self.token}",
+                        "Range": f"bytes={size}-"
+                    }, stream=True
                 ) as r:
                     r.raise_for_status()
-                    with open(temp, "wb") as f:
-                        content_length = int(r.headers["Content-Length"])
+                    with open(temp, "ab") as f:
+                        total_size = int(r.headers.get("Content-Length", 0)) + size
                         progress_bar = ProgressBar(
-                            "Downloading", 0, math.ceil(content_length / chunk_size)
+                            "Downloading", size // chunk_size, math.ceil(total_size / chunk_size)
                         )
                         for chunk in r.iter_content(chunk_size=chunk_size):
                             f.write(chunk)
