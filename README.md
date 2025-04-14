@@ -20,7 +20,7 @@ python -m pip install -r requirements.txt
 
 ## Usage (CLI) ##
 ```console
-usage: run.py [-h] [-d DIR] [-p PASSWORD] [-w WORKER] url
+usage: run.py [-h] [-d DIR] [-p PASSWORD] [-t THREAD] url
 
 positional arguments:
   url
@@ -29,7 +29,7 @@ options:
   -h, --help   show this help message and exit
   -d DIR       output directory
   -p PASSWORD  password
-  -w WORKER    number of workers / threads (default: 1)
+  -t THREAD    number of threads (default: 1)
 ```
 Default output directory is `./output` 
 
@@ -50,7 +50,7 @@ python run.py -p 1234 https://gofile.io/d/foobar
 
 #### Example 3: Download files from https://gofile.io/d/foobar with 4 threads ####
 ```console
-python run.py -w 4 https://gofile.io/d/foobar
+python run.py -t 4 https://gofile.io/d/foobar
 ```
 
 ## License ##
