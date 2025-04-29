@@ -104,6 +104,7 @@ class Downloader:
                     "Cookie": f"accountToken={self.token}",
                     "Range": f"bytes={downloaded_bytes}-"
                 }
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
                 with requests.get(link, headers=headers, stream=True) as r:
                     r.raise_for_status()
                     with open(temp_file, "ab") as f:
