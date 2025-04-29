@@ -1,4 +1,5 @@
 import argparse
+import fnmatch
 import hashlib
 import logging
 import math
@@ -9,6 +10,7 @@ from threading import Lock
 
 import requests
 from pathvalidate import sanitize_filename
+import shutil
 from tqdm import tqdm
 
 
@@ -71,7 +73,7 @@ class Downloader:
                 with open(temp_file, "rb") as f:
                     outfile.write(f.read())
                 os.remove(temp_file)
-        os.rmdir(temp_dir)
+        shutil.rmtree(temp_dir)
 
     def download(self, file: File, num_threads=4):
         link = file.link
@@ -131,9 +133,7 @@ class Downloader:
                         with open(check_file) as f:
                             prev_num_threads = int(f.read())
                     if prev_num_threads is None or prev_num_threads != num_threads:
-                        for f in os.listdir(temp_dir):
-                            os.remove(os.path.join(temp_dir, f))
-                        os.rmdir(temp_dir)
+                        shutil.rmtree(temp_dir)
 
                 if not os.path.exists(temp_dir):
                     # create temp directory for temp files
@@ -180,10 +180,6 @@ class Downloader:
             if self.progress_bar:
                 self.progress_bar.close()
             logger.error(f"failed to download ({e}): {dest} ({link})")
-            if os.path.exists(temp_dir):
-                for f in os.listdir(temp_dir):
-                    os.remove(os.path.join(temp_dir, f))
-                os.rmdir(temp_dir)
 
 
 class GoFileMeta(type):
@@ -220,12 +216,14 @@ class GoFile(metaclass=GoFileMeta):
             else:
                 raise Exception("cannot get wt")
 
-    def execute(self, dir: str, content_id: str = None, url: str = None, password: str = None, num_threads: int = 1) -> None:
-        files = self.get_files(dir, content_id, url, password)
+    def execute(self, dir: str, content_id: str = None, url: str = None, password: str = None, num_threads: int = 1, excludes: list[str] = None) -> None:
+        files = self.get_files(dir, content_id, url, password, excludes)
         for file in files:
             Downloader(token=self.token).download(file, num_threads=num_threads)
 
-    def get_files(self, dir: str, content_id: str = None, url: str = None, password: str = None) -> None:
+    def get_files(self, dir: str, content_id: str = None, url: str = None, password: str = None, excludes: list[str] = None) -> None:
+        if excludes is None:
+            excludes = []
         files = list()
         if content_id is not None:
             self.update_token()
@@ -247,19 +245,21 @@ class GoFile(metaclass=GoFileMeta):
                                 self.execute(dir=dir, content_id=id, password=password)
                             else:
                                 filename = child["name"]
-                                files.append(File(
-                                    link=urllib.parse.unquote(child["link"]), 
-                                    dest=urllib.parse.unquote(os.path.join(dir, sanitize_filename(filename)))))
+                                if not any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
+                                    files.append(File(
+                                        link=urllib.parse.unquote(child["link"]), 
+                                        dest=urllib.parse.unquote(os.path.join(dir, sanitize_filename(filename)))))
                     else:
                         filename = data["data"]["name"]
-                        files.append(File(
-                            link=urllib.parse.unquote(data["data"]["link"]), 
-                            dest=urllib.parse.unquote(os.path.join(dir, sanitize_filename(filename)))))
+                        if not any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
+                            files.append(File(
+                                link=urllib.parse.unquote(data["data"]["link"]), 
+                                dest=urllib.parse.unquote(os.path.join(dir, sanitize_filename(filename)))))
                 else:
                     logger.error(f"invalid password: {data['data'].get('passwordStatus')}")
         elif url is not None:
             if url.startswith("https://gofile.io/d/"):
-                files = self.get_files(dir=dir, content_id=url.split("/")[-1], password=password)
+                files = self.get_files(dir=dir, content_id=url.split("/")[-1], password=password, excludes=excludes)
             else:
                 logger.error(f"invalid url: {url}")
         else:
@@ -272,7 +272,8 @@ if __name__ == "__main__":
     parser.add_argument("-t", type=int, dest="num_threads", help="number of threads")
     parser.add_argument("-d", type=str, dest="dir", help="output directory")
     parser.add_argument("-p", type=str, dest="password", help="password")
+    parser.add_argument("-e", action="append", dest="excludes", help="excluded files")
     args = parser.parse_args()
     num_threads = args.num_threads if args.num_threads is not None else 1
     dir = args.dir if args.dir is not None else "./output"
-    GoFile().execute(dir=dir, url=args.url, password=args.password, num_threads=num_threads)
+    GoFile().execute(dir=dir, url=args.url, password=args.password, num_threads=num_threads, excludes=args.excludes)

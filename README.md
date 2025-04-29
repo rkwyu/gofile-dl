@@ -20,7 +20,7 @@ python -m pip install -r requirements.txt
 
 ## Usage (CLI) ##
 ```console
-usage: run.py [-h] [-d DIR] [-p PASSWORD] [-t THREAD] url
+usage: run.py [-h] [-d DIR] [-p PASSWORD] [-t THREAD] [-e EXCLUDES ...] url
 
 positional arguments:
   url
@@ -30,6 +30,7 @@ options:
   -d DIR       output directory
   -p PASSWORD  password
   -t THREAD    number of threads (default: 1)
+  -e EXCLUDES  excluded files (supporting wildcard *)
 ```
 Default output directory is `./output` 
 
@@ -48,9 +49,14 @@ python run.py -d /baz/qux https://gofile.io/d/foobar
 python run.py -p 1234 https://gofile.io/d/foobar
 ```
 
-#### Example 3: Download files from https://gofile.io/d/foobar with 4 threads ####
+#### Example 4: Download files from https://gofile.io/d/foobar with 4 threads ####
 ```console
 python run.py -t 4 https://gofile.io/d/foobar
+```
+
+#### Example 5: Download files from https://gofile.io/d/foobar except *.jpg, foo.bar files ####
+```console
+python run.py -e "*.jpg" -e "foo.bar" https://gofile.io/d/foobar
 ```
 
 ## License ##
