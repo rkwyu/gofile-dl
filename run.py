@@ -4,7 +4,6 @@ import hashlib
 import logging
 import math
 import os
-import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 
@@ -247,14 +246,14 @@ class GoFile(metaclass=GoFileMeta):
                                 filename = child["name"]
                                 if not any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
                                     files.append(File(
-                                        link=urllib.parse.unquote(child["link"]), 
-                                        dest=urllib.parse.unquote(os.path.join(dir, sanitize_filename(filename)))))
+                                        link=child["link"],
+                                        dest=os.path.join(dir, sanitize_filename(filename))))
                     else:
                         filename = data["data"]["name"]
                         if not any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
                             files.append(File(
-                                link=urllib.parse.unquote(data["data"]["link"]), 
-                                dest=urllib.parse.unquote(os.path.join(dir, sanitize_filename(filename)))))
+                                link=data["data"]["link"],
+                                dest=os.path.join(dir, sanitize_filename(filename))))
                 else:
                     logger.error(f"invalid password: {data['data'].get('passwordStatus')}")
         elif url is not None:
