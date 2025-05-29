@@ -221,7 +221,7 @@ class GoFile(metaclass=GoFileMeta):
         for file in files:
             Downloader(token=self.token).download(file, num_threads=num_threads)
 
-    def get_files(self, dir: str, content_id: str = None, url: str = None, password: str = None, excludes: list[str] = None) -> None:
+    def get_files(self, dir: str, content_id: str = None, url: str = None, password: str = None, excludes: list[str] = None) -> list[File]:
         if excludes is None:
             excludes = []
         files = list()
@@ -242,7 +242,8 @@ class GoFile(metaclass=GoFileMeta):
                         dir = os.path.join(dir, sanitize_filename(dirname))
                         for (id, child) in data["data"]["children"].items():
                             if child["type"] == "folder":
-                                self.execute(dir=dir, content_id=id, password=password)
+                                folder_files = self.get_files(dir=dir, content_id=id, password=password, excludes=excludes)
+                                files.extend(folder_files)
                             else:
                                 filename = child["name"]
                                 if not any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
