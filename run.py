@@ -216,7 +216,12 @@ class GoFile(metaclass=GoFileMeta):
             else:
                 raise Exception("cannot get wt")
 
-    def execute(self, dir: str, content_id: str = None, url: str = None, password: str = None, num_threads: int = 1, excludes: list[str] = None) -> None:
+    def execute(self, dir: str, content_id: str = None, url: str = None, password: str = None, proxy: str = None, num_threads: int = 1, excludes: list[str] = None) -> None:
+        if proxy is not None:
+            logger.info(f"Proxy set to: {proxy}")
+            os.environ['HTTP_PROXY'] = proxy
+            os.environ['HTTPS_PROXY'] = proxy
+
         files = self.get_files(dir, content_id, url, password, excludes)
         for file in files:
             Downloader(token=self.token).download(file, num_threads=num_threads)
@@ -273,8 +278,9 @@ if __name__ == "__main__":
     parser.add_argument("-t", type=int, dest="num_threads", help="number of threads")
     parser.add_argument("-d", type=str, dest="dir", help="output directory")
     parser.add_argument("-p", type=str, dest="password", help="password")
+    parser.add_argument("-x", type=str, dest="proxy", help="proxy server (ip/host:port)")
     parser.add_argument("-e", action="append", dest="excludes", help="excluded files")
     args = parser.parse_args()
     num_threads = args.num_threads if args.num_threads is not None else 1
     dir = args.dir if args.dir is not None else "./output"
-    GoFile().execute(dir=dir, url=args.url, password=args.password, num_threads=num_threads, excludes=args.excludes)
+    GoFile().execute(dir=dir, url=args.url, password=args.password, proxy=args.proxy, num_threads=num_threads, excludes=args.excludes)
