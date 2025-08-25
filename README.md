@@ -20,17 +20,20 @@ python -m pip install -r requirements.txt
 
 ## Usage (CLI) ##
 ```console
-usage: run.py [-h] [-d DIR] [-p PASSWORD] [-t THREAD] [-e EXCLUDES ...] url
+usage: run.py [-h] [-f FILE] [-t NUM_THREADS] [-d DIR] [-p PASSWORD] [-x PROXY] [-i INCLUDES] [-e EXCLUDES] [url]
 
 positional arguments:
-  url
+  url             url to process (if not using -f)
 
 options:
-  -h, --help   show this help message and exit
-  -d DIR       output directory
-  -p PASSWORD  password
-  -t THREAD    number of threads (default: 1)
-  -e EXCLUDES  excluded files (supporting wildcard *)
+  -h, --help      show this help message and exit
+  -f FILE         local file to process
+  -t NUM_THREADS  number of threads (default: 1)
+  -d DIR          output directory
+  -p PASSWORD     password
+  -x PROXY        proxy server (format: ip/host:port)
+  -i INCLUDES     included files (supporting wildcard *)
+  -e EXCLUDES     excluded files (supporting wildcard *)
 ```
 Default output directory is `./output` 
 
@@ -57,6 +60,17 @@ python run.py -t 4 https://gofile.io/d/foobar
 #### Example 5: Download files from https://gofile.io/d/foobar except *.jpg, foo.bar files ####
 ```console
 python run.py -e "*.jpg" -e "foo.bar" https://gofile.io/d/foobar
+```
+
+#### Example 6: Download files from https://gofile.io/d/foobar including only *.png, except xyz.png files ####
+```console
+python run.py -i "*.png" -e "xyz.png" https://gofile.io/d/foobar
+```
+
+#### Example 7: Download files from a local file ####
+```console
+echo "https://gofile.io/d/foobar" > input.txt
+python run.py -f ./input.txt
 ```
 
 ## License ##

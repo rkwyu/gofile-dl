@@ -303,21 +303,41 @@ class GoFile(metaclass=GoFileMeta):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("url")
-    parser.add_argument("-t", type=int, dest="num_threads", help="number of threads")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("url", nargs='?', default=None, help="url to process (if not using -f)")
+    group.add_argument("-f", type=str, dest="file", help="local file to process")
+    parser.add_argument("-t", type=int, dest="num_threads", help="number of threads (default: 1)")
     parser.add_argument("-d", type=str, dest="dir", help="output directory")
     parser.add_argument("-p", type=str, dest="password", help="password")
-    parser.add_argument("-x", type=str, dest="proxy", help="proxy server (ip/host:port)")
-    parser.add_argument("-i", action="append", dest="includes", help="included files")
-    parser.add_argument("-e", action="append", dest="excludes", help="excluded files")
+    parser.add_argument("-x", type=str, dest="proxy", help="proxy server (format: ip/host:port)")
+    parser.add_argument("-i", action="append", dest="includes", help="included files (supporting wildcard *)")
+    parser.add_argument("-e", action="append", dest="excludes", help="excluded files (supporting wildcard *)")
     args = parser.parse_args()
     num_threads = args.num_threads if args.num_threads is not None else 1
     dir = args.dir if args.dir is not None else "./output"
-    GoFile().execute(
-        dir=dir, 
-        url=args.url, 
-        password=args.password, 
-        proxy=args.proxy, 
-        num_threads=num_threads, 
-        includes=args.includes, 
-        excludes=args.excludes)
+    if args.file is not None:
+        if os.path.exists(args.file):
+            with open(args.file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line == "" or line.startswith("#"):
+                        continue
+                    GoFile().execute(
+                        dir=dir, 
+                        url=line, 
+                        password=args.password, 
+                        proxy=args.proxy, 
+                        num_threads=num_threads, 
+                        includes=args.includes, 
+                        excludes=args.excludes)
+        else:
+            logger.error(f"file not found: {args.file}")
+    else:
+        GoFile().execute(
+            dir=dir, 
+            url=args.url, 
+            password=args.password, 
+            proxy=args.proxy, 
+            num_threads=num_threads, 
+            includes=args.includes, 
+            excludes=args.excludes)
