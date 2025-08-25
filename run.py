@@ -215,17 +215,47 @@ class GoFile(metaclass=GoFileMeta):
             else:
                 raise Exception("cannot get wt")
 
-    def execute(self, dir: str, content_id: str = None, url: str = None, password: str = None, proxy: str = None, num_threads: int = 1, excludes: list[str] = None) -> None:
+    def execute(
+        self, 
+        dir: str, 
+        content_id: str = None, 
+        url: str = None, 
+        password: str = None, 
+        proxy: str = None, 
+        num_threads: int = 1, 
+        includes: list[str] = None, 
+        excludes: list[str] = None) -> None:
         if proxy is not None:
             logger.info(f"Proxy set to: {proxy}")
             os.environ['HTTP_PROXY'] = proxy
             os.environ['HTTPS_PROXY'] = proxy
+        else:
+            os.environ.pop('HTTP_PROXY', None)
+            os.environ.pop('HTTPS_PROXY', None)
 
-        files = self.get_files(dir, content_id, url, password, excludes)
+        files = self.get_files(dir, content_id, url, password, includes, excludes)
         for file in files:
             Downloader(token=self.token).download(file, num_threads=num_threads)
 
-    def get_files(self, dir: str, content_id: str = None, url: str = None, password: str = None, excludes: list[str] = None) -> list[File]:
+    def is_included(self, filename: str, includes: list[str]) -> bool:
+        if len(includes) == 0:
+            return True
+        return any(fnmatch.fnmatch(filename, pattern) for pattern in includes)
+    
+    def is_excluded(self, filename: str, excludes: list[str]) -> bool:
+        if len(excludes) == 0:
+            return False
+        return any(fnmatch.fnmatch(filename, pattern) for pattern in excludes)
+
+    def get_files(
+            self, dir: str, 
+            content_id: str = None, 
+            url: str = None, 
+            password: str = None, 
+            includes: list[str] = None,
+            excludes: list[str] = None) -> list[File]:
+        if includes is None:
+            includes = []
         if excludes is None:
             excludes = []
         files = list()
@@ -246,17 +276,17 @@ class GoFile(metaclass=GoFileMeta):
                         dir = os.path.join(dir, sanitize_filename(dirname))
                         for (id, child) in data["data"]["children"].items():
                             if child["type"] == "folder":
-                                folder_files = self.get_files(dir=dir, content_id=id, password=password, excludes=excludes)
+                                folder_files = self.get_files(dir=dir, content_id=id, password=password, includes=includes, excludes=excludes)
                                 files.extend(folder_files)
                             else:
                                 filename = child["name"]
-                                if not any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
+                                if self.is_included(filename, includes) and not self.is_excluded(filename, excludes):
                                     files.append(File(
                                         link=child["link"],
                                         dest=os.path.join(dir, sanitize_filename(filename))))
                     else:
                         filename = data["data"]["name"]
-                        if not any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
+                        if self.is_included(filename, includes) and not self.is_excluded(filename, excludes):
                             files.append(File(
                                 link=data["data"]["link"],
                                 dest=os.path.join(dir, sanitize_filename(filename))))
@@ -264,7 +294,7 @@ class GoFile(metaclass=GoFileMeta):
                     logger.error(f"invalid password: {data['data'].get('passwordStatus')}")
         elif url is not None:
             if url.startswith("https://gofile.io/d/"):
-                files = self.get_files(dir=dir, content_id=url.split("/")[-1], password=password, excludes=excludes)
+                files = self.get_files(dir=dir, content_id=url.split("/")[-1], password=password, includes=includes, excludes=excludes)
             else:
                 logger.error(f"invalid url: {url}")
         else:
@@ -278,8 +308,16 @@ if __name__ == "__main__":
     parser.add_argument("-d", type=str, dest="dir", help="output directory")
     parser.add_argument("-p", type=str, dest="password", help="password")
     parser.add_argument("-x", type=str, dest="proxy", help="proxy server (ip/host:port)")
+    parser.add_argument("-i", action="append", dest="includes", help="included files")
     parser.add_argument("-e", action="append", dest="excludes", help="excluded files")
     args = parser.parse_args()
     num_threads = args.num_threads if args.num_threads is not None else 1
     dir = args.dir if args.dir is not None else "./output"
-    GoFile().execute(dir=dir, url=args.url, password=args.password, proxy=args.proxy, num_threads=num_threads, excludes=args.excludes)
+    GoFile().execute(
+        dir=dir, 
+        url=args.url, 
+        password=args.password, 
+        proxy=args.proxy, 
+        num_threads=num_threads, 
+        includes=args.includes, 
+        excludes=args.excludes)
