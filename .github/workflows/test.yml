@@ -1,0 +1,47 @@
+name: Nightly Regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * *" # Runs at 02:00 UTC every day
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [3.11]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Clean output folder
+      run: rm -f ./output/*
+
+    - name: Run gofile-dl
+      run: python run.py https://gofile.io/d/FDyyvA
+
+    - name: Verify
+      run: |
+        FILE="./output/demo/87258843.png"
+        if [ -f "$FILE" ]; then
+          echo "Downloaded successfully: $FILE exists."
+        else
+          echo "Download failed: $FILE not found!"
+          exit 1
+        fi
