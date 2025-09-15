@@ -1,4 +1,4 @@
-# Gofile-dl [![python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org) 
+# Gofile-dl [![python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)  ![Regression Tests](https://github.com/rkwyu/gofile-dl/actions/workflows/test.yml/badge.svg)  
 
 <a href="https://buymeacoffee.com/r1y5i" target="_blank">
 <img style="border-radius: 20px" src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174">
