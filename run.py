@@ -208,7 +208,7 @@ class GoFile(metaclass=GoFileMeta):
 
     def update_wt(self) -> None:
         if self.wt == "":
-            alljs = requests.get("https://gofile.io/dist/js/global.js").text
+            alljs = requests.get("https://gofile.io/dist/js/config.js").text
             if 'appdata.wt = "' in alljs:
                 self.wt = alljs.split('appdata.wt = "')[1].split('"')[0]
                 logger.info(f"updated wt: {self.wt}")
@@ -264,9 +264,10 @@ class GoFile(metaclass=GoFileMeta):
             self.update_wt()
             hash_password = hashlib.sha256(password.encode()).hexdigest() if password != None else ""
             data = requests.get(
-                f"https://api.gofile.io/contents/{content_id}?wt={self.wt}&cache=true&password={hash_password}",
+                f"https://api.gofile.io/contents/{content_id}?cache=true&password={hash_password}",
                 headers={
                     "Authorization": "Bearer " + self.token,
+                    "X-Website-Token": self.wt,
                 },
             ).json()
             if data["status"] == "ok":
