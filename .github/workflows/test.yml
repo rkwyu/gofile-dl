@@ -54,7 +54,7 @@ jobs:
 
     - name: Verify
       run: |
-        FILE="./output/test/test.txt"
+        FILE="./output/test.txt"
         if [ ! -f "$FILE" ]; then
           echo "Download failed: file missing"
           exit 1
