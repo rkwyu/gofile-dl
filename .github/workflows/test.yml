@@ -54,7 +54,10 @@ jobs:
 
     - name: Verify
       run: |
-        FILE="./output/test.txt"
+        LINK="$GOFILE_LINK"
+        ID=$(basename "$LINK")
+
+        FILE="./output/$ID/test.txt"
         if [ ! -f "$FILE" ]; then
           echo "Download failed: file missing"
           exit 1
@@ -63,4 +66,4 @@ jobs:
           echo "Download failed: content mismatch"
           exit 1
         fi
-        echo "Download OK"
+        echo "Downloaded file: $FILE"
