@@ -30,18 +30,37 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+    - name: Create test file
+      run: |
+        mkdir -p testdata
+        echo "hello gofile" > testdata/test.txt
+
+    - name: Upload file to Gofile
+      id: upload
+      run: |
+        SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name')
+        RESPONSE=$(curl -s -F "file=@testdata/test.txt" "https://${SERVER}.gofile.io/uploadFile")
+        echo "$RESPONSE"
+        LINK=$(echo "$RESPONSE" | jq -r '.data.downloadPage')
+        echo "GOFILE_LINK=$LINK" >> $GITHUB_ENV
+
     - name: Clean output folder
       run: rm -f ./output/*
 
     - name: Run gofile-dl
-      run: python run.py https://gofile.io/d/FDyyvA
+      run: |
+        echo "Testing download from $GOFILE_LINK"
+        python run.py "$GOFILE_LINK"
 
     - name: Verify
       run: |
-        FILE="./output/demo/87258843.png"
-        if [ -f "$FILE" ]; then
-          echo "Downloaded successfully: $FILE exists."
-        else
-          echo "Download failed: $FILE not found!"
+        FILE="./output/test/test.txt"
+        if [ ! -f "$FILE" ]; then
+          echo "Download failed: file missing"
           exit 1
         fi
+        if ! grep -q "hello gofile" "$FILE"; then
+          echo "Download failed: content mismatch"
+          exit 1
+        fi
+        echo "Download OK"
