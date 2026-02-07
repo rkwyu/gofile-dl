@@ -5,17 +5,42 @@
 </a>
 
 ## About ##
-A CLI (Command Line Interface) tool to download all directories and files from a gofile.io link as a batch  
+A command-line tool for downloading files from [gofile.io](https://gofile.io/) where you are authorized to access them.
+
+## ⚠️ Legal & Ethical Notice ##
+
+Use this tool __only on files that you have permission to download__, such as:
+- Files you uploaded yourself
+- Publicly shared files
+- Files you have been explicitly granted access to
+
+Unauthorized downloading or redistribution of copyrighted material may violate copyright law.
+The authors of this project are __not responsible for misuse__.
+
+## About ##
+
+gofile-dl is a utility that helps you download files from Gofile.io efficiently. It supports batch downloads and can save files to a specified local directory.
+
+> This tool does not bypass protections or provide access to private content without authorization.
+
+## Prerequisites ##
+
+- Python 3.10+ (recommended: latest stable release)
+- pip installed
+
+Confirm installation:
+```console
+python --version
+pip --version
+```
 
 ## Setup ##
-1. Download repository  
+
+Clone the repository and install dependencies:
 ```console
 git clone https://github.com/rkwyu/gofile-dl
-```
-2. Install dependencies
-```console
-cd ./gofile-dl
-python -m pip install -r requirements.txt
+cd gofile-dl
+pip install -r requirements.txt
 ```
 
 ## Usage (CLI) ##
@@ -72,6 +97,16 @@ python run.py -i "*.png" -e "xyz.png" https://gofile.io/d/foobar
 echo "https://gofile.io/d/foobar" > input.txt
 python run.py -f ./input.txt
 ```
+
+## Why This Matters ##
+
+This README clarifies that gofile-dl is intended for use only on authorized content. It is the user’s responsibility to comply with copyright law and the platform’s terms of service.
+
+## Disclaimer ##
+
+This project is not affiliated with or endorsed by Gofile.io.
+
+All trademarks and copyrights belong to their respective owners.
 
 ## License ##
 This project is licensed under the [MIT License](LICENSE.md)
