@@ -6,6 +6,8 @@ import math
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
+import hashlib
+import time
 
 import requests
 from pathvalidate import sanitize_filename
@@ -24,7 +26,8 @@ logger = logging.getLogger("GoFile")
 
 
 class File:
-    def __init__(self, link: str, dest: str):
+    def __init__(self, link: str, dest: str, size: str):
+        self.size = size
         self.link = link
         self.dest = dest
 
@@ -37,12 +40,6 @@ class Downloader:
         self.token = token
         self.progress_lock = Lock()
         self.progress_bar = None
-
-    # send HEAD request to get the file size, and check if the site supports range
-    def _get_total_size(self, link):
-        r = requests.head(link, headers={"Cookie": f"accountToken={self.token}"})
-        r.raise_for_status()
-        return int(r.headers["Content-Length"]), r.headers.get("Accept-Ranges", "none") == "bytes"
 
     # download the range of the file
     def _download_range(self, link, start, end, temp_file, i):
@@ -75,19 +72,16 @@ class Downloader:
         shutil.rmtree(temp_dir)
 
     def download(self, file: File, num_threads=4):
+        total_size = file.size
         link = file.link
         dest = file.dest
         temp_dir = dest + "_parts"
         try:
-            # get file size, and if the site supports range
-            total_size, is_support_range = self._get_total_size(link)
-
             # skip download if the file has been fully downloaded
             if os.path.exists(dest):
                 if os.path.getsize(dest) == total_size:
                     return
-            
-            if num_threads == 1 or not is_support_range:
+            if num_threads == 1:
                 temp_file = dest + ".part"
 
                 # calculate downloaded bytes
@@ -194,26 +188,26 @@ class GoFileMeta(type):
 class GoFile(metaclass=GoFileMeta):
     def __init__(self) -> None:
         self.token = ""
-        self.wt = ""
+        self.xwt = ""
         self.lock = Lock()
+        self.xbl = "en"
+        self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0"
 
     def update_token(self) -> None:
         if self.token == "":
             data = requests.post("https://api.gofile.io/accounts").json()
             if data["status"] == "ok":
                 self.token = data["data"]["token"]
+
+                # Getting X-Website-Token
+                time_slot = int(time.time()) // 14400
+                raw = f"{self.user_agent}::{self.xbl}::{self.token}::{time_slot}::5d4f7g8sd45fsd"
+                self.xwt = hashlib.sha256(raw.encode()).hexdigest()
+                logger.info(f"updated xwt: {self.xwt}")
+
                 logger.info(f"updated token: {self.token}")
             else:
                 raise Exception("cannot get token")
-
-    def update_wt(self) -> None:
-        if self.wt == "":
-            alljs = requests.get("https://gofile.io/dist/js/config.js").text
-            if 'appdata.wt = "' in alljs:
-                self.wt = alljs.split('appdata.wt = "')[1].split('"')[0]
-                logger.info(f"updated wt: {self.wt}")
-            else:
-                raise Exception("cannot get wt")
 
     def execute(
         self, 
@@ -261,13 +255,21 @@ class GoFile(metaclass=GoFileMeta):
         files = list()
         if content_id is not None:
             self.update_token()
-            self.update_wt()
             hash_password = hashlib.sha256(password.encode()).hexdigest() if password != None else ""
             data = requests.get(
-                f"https://api.gofile.io/contents/{content_id}?cache=true&password={hash_password}",
+                f"https://api.gofile.io/contents/{content_id}",
+                #params={
+                #    'contentFilter': '',
+                #    'page': '1',
+                #    'pageSize': '1000',
+                #    'sortField': 'name',
+                #    'sortDirection': '1',
+                #},
                 headers={
+                    'User-Agent': self.user_agent,
                     "Authorization": "Bearer " + self.token,
-                    "X-Website-Token": self.wt,
+                    'X-BL': self.xbl,
+                    "X-Website-Token": self.xwt,
                 },
             ).json()
             if data["status"] == "ok":
@@ -283,12 +285,14 @@ class GoFile(metaclass=GoFileMeta):
                                 filename = child["name"]
                                 if self.is_included(filename, includes) and not self.is_excluded(filename, excludes):
                                     files.append(File(
+                                        size=child["size"],
                                         link=child["link"],
                                         dest=os.path.join(dir, sanitize_filename(filename))))
                     else:
                         filename = data["data"]["name"]
                         if self.is_included(filename, includes) and not self.is_excluded(filename, excludes):
                             files.append(File(
+                                size=data["data"]["size"],
                                 link=data["data"]["link"],
                                 dest=os.path.join(dir, sanitize_filename(filename))))
                 else:
