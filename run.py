@@ -6,10 +6,11 @@ import math
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
-import hashlib
 import time
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from pathvalidate import sanitize_filename
 import shutil
 from tqdm import tqdm
@@ -24,9 +25,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger("GoFile")
 
+CHUNK_SIZE = 65536
+REQUEST_TIMEOUT = 30
+DOWNLOAD_TIMEOUT = (10, 60)
+
+
+def _create_session():
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=10)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+def _display_name(dest: str) -> str:
+    basename = os.path.basename(dest)
+    if len(basename) > 25:
+        return basename[:10] + "....." + basename[-10:]
+    return basename.rjust(25)
+
 
 class File:
-    def __init__(self, link: str, dest: str, size: str):
+    def __init__(self, link: str, dest: str, size: int):
         self.size = size
         self.link = link
         self.dest = dest
@@ -40,8 +65,8 @@ class Downloader:
         self.token = token
         self.progress_lock = Lock()
         self.progress_bar = None
+        self.session = _create_session()
 
-    # download the range of the file
     def _download_range(self, link, start, end, temp_file, i):
         existing_size = os.path.getsize(temp_file) if os.path.exists(temp_file) else 0
         range_start = start + existing_size
@@ -51,23 +76,22 @@ class Downloader:
             "Cookie": f"accountToken={self.token}",
             "Range": f"bytes={range_start}-{end}"
         }
-        with requests.get(link, headers=headers, stream=True) as r:
+        with self.session.get(link, headers=headers, stream=True, timeout=DOWNLOAD_TIMEOUT) as r:
             r.raise_for_status()
             with open(temp_file, "ab") as f:
-                for chunk in r.iter_content(chunk_size=8192):
+                for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
                     if chunk:
                         f.write(chunk)
                         with self.progress_lock:
                             self.progress_bar.update(len(chunk))
         return i
 
-    # merge temp files
     def _merge_temp_files(self, temp_dir, dest, num_threads):
         with open(dest, "wb") as outfile:
             for i in range(num_threads):
                 temp_file = os.path.join(temp_dir, f"part_{i}")
                 with open(temp_file, "rb") as f:
-                    outfile.write(f.read())
+                    shutil.copyfileobj(f, outfile)
                 os.remove(temp_file)
         shutil.rmtree(temp_dir)
 
@@ -77,48 +101,37 @@ class Downloader:
         dest = file.dest
         temp_dir = dest + "_parts"
         try:
-            # skip download if the file has been fully downloaded
             if os.path.exists(dest):
                 if os.path.getsize(dest) == total_size:
                     return
+
+            display_name = _display_name(dest)
+
             if num_threads == 1:
                 temp_file = dest + ".part"
-
-                # calculate downloaded bytes
                 downloaded_bytes = os.path.getsize(temp_file) if os.path.exists(temp_file) else 0
 
-                # start progress bar
-                if len(os.path.basename(dest)) > 25:
-                    display_name = os.path.basename(dest)[:10] + "....." + os.path.basename(dest)[-10:]
-                else:
-                    display_name = os.path.basename(dest).rjust(25)
                 self.progress_bar = tqdm(total=total_size, initial=downloaded_bytes, unit='B', unit_scale=True, desc=f'Downloading {display_name}')
 
-                # download file
                 headers = {
                     "Cookie": f"accountToken={self.token}",
                     "Range": f"bytes={downloaded_bytes}-"
                 }
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
-                with requests.get(link, headers=headers, stream=True) as r:
+                with self.session.get(link, headers=headers, stream=True, timeout=DOWNLOAD_TIMEOUT) as r:
                     r.raise_for_status()
                     with open(temp_file, "ab") as f:
-                        for chunk in r.iter_content(chunk_size=8192):
+                        for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
                             if chunk:
                                 f.write(chunk)
                                 self.progress_bar.update(len(chunk))
 
-                # close progress bar
                 self.progress_bar.close()
-
-                # rename temp file
                 os.rename(temp_file, dest)
             else:
-                # remove single thread file if it exists
-                os.path.exists(dest + ".part") and os.remove(dest + ".part")
+                if os.path.exists(dest + ".part"):
+                    os.remove(dest + ".part")
 
-                # check if the num_threads is matched
-                # remove the previous downloaded temp files if it doesn't match
                 check_file = os.path.join(temp_dir, "num_threads")
                 if os.path.exists(temp_dir):
                     prev_num_threads = None
@@ -129,31 +142,20 @@ class Downloader:
                         shutil.rmtree(temp_dir)
 
                 if not os.path.exists(temp_dir):
-                    # create temp directory for temp files
                     os.makedirs(temp_dir, exist_ok=True)
-
-                    # add check_file
                     with open(check_file, "w") as f:
                         f.write(str(num_threads))
 
-                # calculate the number of temp files
                 part_size = math.ceil(total_size / num_threads)
 
-                # calculate downloaded bytes
                 downloaded_bytes = 0
                 for i in range(num_threads):
                     part_file = os.path.join(temp_dir, f"part_{i}")
                     if os.path.exists(part_file):
                         downloaded_bytes += os.path.getsize(part_file)
 
-                # start progress bar
-                if len(os.path.basename(dest)) > 25:
-                    display_name = os.path.basename(dest)[:10] + "....." + os.path.basename(dest)[-10:]
-                else:
-                    display_name = os.path.basename(dest).rjust(25)
                 self.progress_bar = tqdm(total=total_size, initial=downloaded_bytes, unit='B', unit_scale=True, desc=f'Downloading {display_name}')
 
-                # download temp files
                 futures = []
                 with ThreadPoolExecutor(max_workers=num_threads) as executor:
                     for i in range(num_threads):
@@ -164,10 +166,7 @@ class Downloader:
                     for future in as_completed(futures):
                         future.result()
 
-                # close progress bar
                 self.progress_bar.close()
-
-                # merge temp files
                 self._merge_temp_files(temp_dir, dest, num_threads)
         except Exception as e:
             if self.progress_bar:
@@ -192,14 +191,14 @@ class GoFile(metaclass=GoFileMeta):
         self.lock = Lock()
         self.xbl = "en"
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0"
+        self.session = _create_session()
 
-    def update_token(self) -> None:
-        if self.token == "":
-            data = requests.post("https://api.gofile.io/accounts").json()
+    def update_token(self, force: bool = False) -> None:
+        if self.token == "" or force:
+            data = self.session.post("https://api.gofile.io/accounts", timeout=REQUEST_TIMEOUT).json()
             if data["status"] == "ok":
                 self.token = data["data"]["token"]
 
-                # Getting X-Website-Token
                 time_slot = int(time.time()) // 14400
                 raw = f"{self.user_agent}::{self.xbl}::{self.token}::{time_slot}::5d4f7g8sd45fsd"
                 self.xwt = hashlib.sha256(raw.encode()).hexdigest()
@@ -210,14 +209,14 @@ class GoFile(metaclass=GoFileMeta):
                 raise Exception("cannot get token")
 
     def execute(
-        self, 
-        dir: str, 
-        content_id: str = None, 
-        url: str = None, 
-        password: str = None, 
-        proxy: str = None, 
-        num_threads: int = 1, 
-        includes: list[str] = None, 
+        self,
+        output_dir: str,
+        content_id: str = None,
+        url: str = None,
+        password: str = None,
+        proxy: str = None,
+        num_threads: int = 1,
+        includes: list[str] = None,
         excludes: list[str] = None) -> None:
         if proxy is not None:
             logger.info(f"Proxy set to: {proxy}")
@@ -227,25 +226,45 @@ class GoFile(metaclass=GoFileMeta):
             os.environ.pop('HTTP_PROXY', None)
             os.environ.pop('HTTPS_PROXY', None)
 
-        files = self.get_files(dir, content_id, url, password, includes, excludes)
+        files = self.get_files(output_dir, content_id, url, password, includes, excludes)
+        downloader = Downloader(token=self.token)
         for file in files:
-            Downloader(token=self.token).download(file, num_threads=num_threads)
+            downloader.download(file, num_threads=num_threads)
 
     def is_included(self, filename: str, includes: list[str]) -> bool:
         if len(includes) == 0:
             return True
         return any(fnmatch.fnmatch(filename, pattern) for pattern in includes)
-    
+
     def is_excluded(self, filename: str, excludes: list[str]) -> bool:
         if len(excludes) == 0:
             return False
         return any(fnmatch.fnmatch(filename, pattern) for pattern in excludes)
 
+    def _fetch_content(self, content_id: str) -> dict:
+        for attempt in range(2):
+            data = self.session.get(
+                f"https://api.gofile.io/contents/{content_id}",
+                headers={
+                    'User-Agent': self.user_agent,
+                    "Authorization": "Bearer " + self.token,
+                    'X-BL': self.xbl,
+                    "X-Website-Token": self.xwt,
+                },
+                timeout=REQUEST_TIMEOUT,
+            ).json()
+            if data["status"] == "ok":
+                return data
+            if attempt == 0:
+                logger.warning(f"API error (status={data['status']}), refreshing token and retrying")
+                self.update_token(force=True)
+        return data
+
     def get_files(
-            self, dir: str, 
-            content_id: str = None, 
-            url: str = None, 
-            password: str = None, 
+            self, output_dir: str,
+            content_id: str = None,
+            url: str = None,
+            password: str = None,
             includes: list[str] = None,
             excludes: list[str] = None) -> list[File]:
         if includes is None:
@@ -255,31 +274,15 @@ class GoFile(metaclass=GoFileMeta):
         files = list()
         if content_id is not None:
             self.update_token()
-            hash_password = hashlib.sha256(password.encode()).hexdigest() if password != None else ""
-            data = requests.get(
-                f"https://api.gofile.io/contents/{content_id}",
-                #params={
-                #    'contentFilter': '',
-                #    'page': '1',
-                #    'pageSize': '1000',
-                #    'sortField': 'name',
-                #    'sortDirection': '1',
-                #},
-                headers={
-                    'User-Agent': self.user_agent,
-                    "Authorization": "Bearer " + self.token,
-                    'X-BL': self.xbl,
-                    "X-Website-Token": self.xwt,
-                },
-            ).json()
+            data = self._fetch_content(content_id)
             if data["status"] == "ok":
                 if data["data"].get("passwordStatus", "passwordOk") == "passwordOk":
                     if data["data"]["type"] == "folder":
                         dirname = data["data"]["name"]
-                        dir = os.path.join(dir, sanitize_filename(dirname))
+                        output_dir = os.path.join(output_dir, sanitize_filename(dirname))
                         for (id, child) in data["data"]["children"].items():
                             if child["type"] == "folder":
-                                folder_files = self.get_files(dir=dir, content_id=id, password=password, includes=includes, excludes=excludes)
+                                folder_files = self.get_files(output_dir=output_dir, content_id=id, password=password, includes=includes, excludes=excludes)
                                 files.extend(folder_files)
                             else:
                                 filename = child["name"]
@@ -287,19 +290,21 @@ class GoFile(metaclass=GoFileMeta):
                                     files.append(File(
                                         size=child["size"],
                                         link=child["link"],
-                                        dest=os.path.join(dir, sanitize_filename(filename))))
+                                        dest=os.path.join(output_dir, sanitize_filename(filename))))
                     else:
                         filename = data["data"]["name"]
                         if self.is_included(filename, includes) and not self.is_excluded(filename, excludes):
                             files.append(File(
                                 size=data["data"]["size"],
                                 link=data["data"]["link"],
-                                dest=os.path.join(dir, sanitize_filename(filename))))
+                                dest=os.path.join(output_dir, sanitize_filename(filename))))
                 else:
                     logger.error(f"invalid password: {data['data'].get('passwordStatus')}")
+            else:
+                logger.error(f"API request failed for content {content_id}: {data.get('status')}")
         elif url is not None:
             if url.startswith("https://gofile.io/d/"):
-                files = self.get_files(dir=dir, content_id=url.split("/")[-1], password=password, includes=includes, excludes=excludes)
+                files = self.get_files(output_dir=output_dir, content_id=url.split("/")[-1], password=password, includes=includes, excludes=excludes)
             else:
                 logger.error(f"invalid url: {url}")
         else:
@@ -319,7 +324,7 @@ if __name__ == "__main__":
     parser.add_argument("-e", action="append", dest="excludes", help="excluded files (supporting wildcard *)")
     args = parser.parse_args()
     num_threads = args.num_threads if args.num_threads is not None else 1
-    dir = args.dir if args.dir is not None else "./output"
+    output_dir = args.dir if args.dir is not None else "./output"
     if args.file is not None:
         if os.path.exists(args.file):
             with open(args.file) as f:
@@ -328,21 +333,21 @@ if __name__ == "__main__":
                     if line == "" or line.startswith("#"):
                         continue
                     GoFile().execute(
-                        dir=dir, 
-                        url=line, 
-                        password=args.password, 
-                        proxy=args.proxy, 
-                        num_threads=num_threads, 
-                        includes=args.includes, 
+                        output_dir=output_dir,
+                        url=line,
+                        password=args.password,
+                        proxy=args.proxy,
+                        num_threads=num_threads,
+                        includes=args.includes,
                         excludes=args.excludes)
         else:
             logger.error(f"file not found: {args.file}")
     else:
         GoFile().execute(
-            dir=dir, 
-            url=args.url, 
-            password=args.password, 
-            proxy=args.proxy, 
-            num_threads=num_threads, 
-            includes=args.includes, 
+            output_dir=output_dir,
+            url=args.url,
+            password=args.password,
+            proxy=args.proxy,
+            num_threads=num_threads,
+            includes=args.includes,
             excludes=args.excludes)
